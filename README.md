@@ -1,4 +1,4 @@
-![Logo](admin/victron-ve-bus.png)
+![Logo](admin/victron-ve-bus.svg)
 # ioBroker.victron-ve-bus
 
 [![NPM version](https://img.shields.io/npm/v/iobroker.victron-ve-bus.svg)](https://www.npmjs.com/package/iobroker.victron-ve-bus)

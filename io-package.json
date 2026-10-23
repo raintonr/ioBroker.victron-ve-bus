@@ -55,9 +55,9 @@
             "license": "MIT"
         },
         "platform": "Javascript/Node.js",
-        "icon": "victron-ve-bus.png",
+        "icon": "victron-ve-bus.svg",
         "enabled": true,
-        "extIcon": "https://raw.githubusercontent.com/raintonr/ioBroker.victron-ve-bus/main/admin/victron-ve-bus.png",
+        "extIcon": "https://raw.githubusercontent.com/raintonr/ioBroker.victron-ve-bus/main/admin/victron-ve-bus.svg",
         "readme": "https://github.com/raintonr/ioBroker.victron-ve-bus/blob/main/README.md",
         "loglevel": "info",
         "tier": 3,
