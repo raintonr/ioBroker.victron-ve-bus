@@ -1,0 +1,89 @@
+{
+    "common": {
+        "name": "victron-ve-bus",
+        "version": "0.0.1",
+        "news": {
+            "0.0.1": {
+                "en": "initial release",
+                "de": "Erstveröffentlichung",
+                "ru": "Начальная версия",
+                "pt": "lançamento inicial",
+                "nl": "Eerste uitgave",
+                "fr": "Première version",
+                "it": "Versione iniziale",
+                "es": "Versión inicial",
+                "pl": "Pierwsze wydanie",
+                "uk": "Початкова версія",
+                "zh-cn": "首次出版"
+            }
+        },
+        "titleLang": {
+            "en": "Victron VE.Bus",
+            "de": "Victron VE.Bus",
+            "ru": "Автобус Victron VE.",
+            "pt": "Victron VE.Bus",
+            "nl": "Victron VE.Bus",
+            "fr": "Victron VE.Bus",
+            "it": "Victron VE.Bus",
+            "es": "Victron VE.Bus",
+            "pl": "Victron VE.Bus",
+            "uk": "Victron VE.Bus",
+            "zh-cn": "Victron VE总线"
+        },
+        "desc": {
+            "en": "Communicate with Victron devices over VE.Bus",
+            "de": "Kommunizieren Sie mit Victron-Geräten über VE.Bus",
+            "ru": "Общайтесь с устройствами Victron через VE.Bus",
+            "pt": "Comunique-se com dispositivos Victron através de VE.Bus",
+            "nl": "Communiceer met Victron-apparaten via VE.Bus",
+            "fr": "Communiquez avec les appareils Victron via VE.Bus",
+            "it": "Comunica con i dispositivi Victron tramite VE.Bus",
+            "es": "Comunicarse con dispositivos Victron a través de VE.Bus",
+            "pl": "Komunikuj się z urządzeniami Victron poprzez VE.Bus",
+            "uk": "Спілкуйтеся з пристроями Victron через VE.Bus",
+            "zh-cn": "通过 VE.Bus 与 Victron 设备通信"
+        },
+        "authors": [
+            "Robin Rainton <robin@rainton.com>"
+        ],
+        "keywords": [
+            "victron",
+            "VE.Bus"
+        ],
+        "licenseInformation": {
+            "type": "free",
+            "license": "MIT"
+        },
+        "platform": "Javascript/Node.js",
+        "icon": "victron-ve-bus.png",
+        "enabled": true,
+        "extIcon": "https://raw.githubusercontent.com/raintonr/ioBroker.victron-ve-bus/main/admin/victron-ve-bus.png",
+        "readme": "https://github.com/raintonr/ioBroker.victron-ve-bus/blob/main/README.md",
+        "loglevel": "info",
+        "tier": 3,
+        "mode": "daemon",
+        "type": "energy",
+        "compact": true,
+        "connectionType": "local",
+        "dataSource": "poll",
+        "adminUI": {
+            "config": "json"
+        },
+        "dependencies": [
+            {
+                "js-controller": ">=6.0.11"
+            }
+        ],
+        "globalDependencies": [
+            {
+                "admin": ">=7.0.23"
+            }
+        ]
+    },
+    "native": {
+        "option1": true,
+        "option2": "42"
+    },
+    "objects": [],
+    "instanceObjects": []
+}
