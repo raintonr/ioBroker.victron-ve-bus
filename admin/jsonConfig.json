@@ -2,25 +2,14 @@
     "i18n": true,
     "type": "panel",
     "items": {
-        "option1": {
-            "type": "checkbox",
-            "label": "option1",
-            "newLine": true,
-            "xs": 12,
-            "sm": 12,
-            "md": 6,
-            "lg": 4,
-            "xl": 4
-        },
-        "option2": {
+        "serialPort": {
             "type": "text",
-            "label": "option2",
-            "newLine": true,
+            "label": "Serial port device",
             "xs": 12,
             "sm": 12,
-            "md": 6,
-            "lg": 4,
-            "xl": 4
+            "md": 12,
+            "lg": 9,
+            "xl": 6
         }
     }
 }

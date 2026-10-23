@@ -43,13 +43,8 @@
             "uk": "Спілкуйтеся з пристроями Victron через VE.Bus",
             "zh-cn": "通过 VE.Bus 与 Victron 设备通信"
         },
-        "authors": [
-            "Robin Rainton <robin@rainton.com>"
-        ],
-        "keywords": [
-            "victron",
-            "VE.Bus"
-        ],
+        "authors": ["Robin Rainton <robin@rainton.com>"],
+        "keywords": ["victron", "VE.Bus"],
         "licenseInformation": {
             "type": "free",
             "license": "MIT"
@@ -81,8 +76,7 @@
         ]
     },
     "native": {
-        "option1": true,
-        "option2": "42"
+        "serialPort": ""
     },
     "objects": [],
     "instanceObjects": []
