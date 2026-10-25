@@ -13,7 +13,13 @@
 
 ## victron-ve-bus adapter for ioBroker
 
-Communicate with Victron devices over VE.Bus
+Communicate with Victron devices directly over VE.Bus without the need for Venus OS or other dependencies (aside from a serial/USB VE.Bus interface).
+
+### References
+
+https://github.com/victronenergy/venus/wiki/dbus
+https://github.com/victronenergy/dbus-systemcalc-py
+https://www.victronenergy.com/upload/documents/Technical-Information-Interfacing-with-VE-Bus-products-MK2-Protocol-3-14.pdf
 
 ## Changelog
 
