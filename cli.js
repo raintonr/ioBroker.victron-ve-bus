@@ -23,7 +23,8 @@ class MonitorHandler extends Handler {
     }
 
     on_response(response) {
-        this.log.info(response);
+        // Don't log the response as we will do that from the returned object
+        this.log.debug('response');
     }
 
     on_idle() {
