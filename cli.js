@@ -4,8 +4,16 @@
 'use strict';
 
 const { AC_PHASES_SUPPORTED, Handler, InterfaceFlags, SwitchState, VictronMK3, probe } = require('./lib/victronMk3');
+const { inspect } = require('util');
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 5000;
+
+const log = {
+    error: console.error,
+    warn: console.warn,
+    info: console.info,
+    debug: console.debug,
+};
 
 class MonitorHandler extends Handler {
     constructor(options) {
@@ -84,21 +92,42 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function dumpObject(obj) {
+    return inspect(obj, { colors: Boolean(process.stdout.isTTY), depth: null, compact: false });
+}
 function dumpResponse(response) {
     if (response) {
-        console.dir(response, { depth: null });
+        log.info(dumpObject(response));
+    } else {
+        log.warn('No response');
     }
 }
 
 async function poll(mk3, handler, flags = null) {
+    log.info('sendInterfaceRequest...');
     dumpResponse(await mk3.sendInterfaceRequest(flags));
+
+    log.info('sendLEDRequest...');
     dumpResponse(await mk3.sendLEDRequest());
+
+    log.info('sendDCRequest...');
     dumpResponse(await mk3.sendDCRequest());
+
     for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase += 1) {
-        dumpResponse(await mk3.sendACRequest(phase));
+        log.info(`sendACRequest (phase ${phase})...`);
+        const response = await mk3.sendACRequest(phase);
+        dumpResponse(response);
+        if (!response || phase <= response?.ac_num_phases) {
+            break;
+        }
     }
+
+    log.info('sendPowerRequest...');
     dumpResponse(await mk3.sendPowerRequest());
+
+    log.info('sendConfigRequest...');
     dumpResponse(await mk3.sendConfigRequest());
+
     if (!handler.faulted) await delay(POLL_INTERVAL_MS);
 }
 
@@ -146,12 +175,11 @@ async function main() {
         return;
     }
 
-    options.log = {
-        error: console.error,
-        warn: console.warn,
-        info: console.info,
-        debug: console.debug,
-    };
+    // Change debug for dummy if not verbose
+    if (!options.verbose) {
+        log.debug = () => {};
+    }
+    options.log = log;
 
     switch (options.command) {
         case 'monitor':
@@ -160,8 +188,11 @@ async function main() {
         case 'control':
             await runControl(options);
             break;
+        case 'probe':
+            log.info(dumpObject(await probe(options)));
+            break;
         default:
-            options.log.info(`Result: ${await probe(options)}`);
+            log.error(`Unknown command: ${options.command}`);
     }
 }
 
