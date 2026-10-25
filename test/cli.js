@@ -7,6 +7,7 @@ const {
   InterfaceFlags,
   LEDState,
   SwitchState,
+  VictronMK3,
   VersionResponse,
   encodeFrame,
 } = require('../lib/victronMk3');
@@ -23,6 +24,17 @@ test('exports protocol constants and response payloads', () => {
   assert.equal(SwitchState.ON, 3);
   assert.equal(LEDState.FLOAT, 8);
   assert.equal(new VersionResponse(1234).version, 1234);
+});
+
+test('requires an injected log object with all supported methods', () => {
+  const log = {
+    error() {},
+    warn() {},
+    info() {},
+    debug() {},
+  };
+  assert.doesNotThrow(() => new VictronMK3({ path: '/dev/ttyUSB0', log }));
+  assert.throws(() => new VictronMK3({ path: '/dev/ttyUSB0' }), /log must provide/);
 });
 
 test('parses monitor, probe, and control CLI commands', () => {
@@ -47,5 +59,17 @@ test('parses monitor, probe, and control CLI commands', () => {
   assert.equal(control.standby, true);
   assert.equal(control.monitor, true);
   assert.equal(control.verbose, true);
+  const controlWithoutMonitoring = parseArgs([
+    'control',
+    '/dev/ttyUSB0',
+    'off',
+    '--monitor',
+    '--no-monitor',
+    '--standby',
+    '--no-standby',
+  ]);
+  assert.equal(controlWithoutMonitoring.monitor, false);
+  assert.equal(controlWithoutMonitoring.standby, false);
+  assert.equal(parseArgs(['control', '/dev/ttyUSB0', 'off', '--current-limit', 'NaN']), null);
   assert.equal(parseArgs(['control', '/dev/ttyUSB0', 'nonsense']), null);
 });

@@ -3,35 +3,27 @@
 
 'use strict';
 
-const {
-    AC_PHASES_SUPPORTED,
-    Handler,
-    InterfaceFlags,
-    LOG_LEVELS,
-    SwitchState,
-    VictronMK3,
-    logger,
-    probe,
-} = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, Handler, InterfaceFlags, SwitchState, VictronMK3, probe } = require('./lib/victronMk3');
 
 const POLL_INTERVAL_MS = 2000;
 
 class MonitorHandler extends Handler {
-    constructor() {
+    constructor(options) {
         super();
+        this.log = options.log;
         this.faulted = false;
     }
 
     on_response(response) {
-        response.log(logger, LOG_LEVELS.INFO);
+        this.log.info(response);
     }
 
     on_idle() {
-        logger.info('Idle');
+        this.log.info('Idle');
     }
 
     on_fault(fault) {
-        logger.error(`Fault: ${fault}`);
+        this.log.error(`Fault: ${fault}`);
         this.faulted = true;
     }
 }
@@ -92,21 +84,27 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function poll(mk3, handler, flags = null) {
-    await mk3.sendInterfaceRequest(flags);
-    await mk3.sendLEDRequest();
-    await mk3.sendDCRequest();
-    for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase += 1) {
-        await mk3.sendACRequest(phase);
+function dumpResponse(response) {
+    if (response) {
+        console.dir(response, { depth: null });
     }
-    await mk3.sendPowerRequest();
-    await mk3.sendConfigRequest();
+}
+
+async function poll(mk3, handler, flags = null) {
+    dumpResponse(await mk3.sendInterfaceRequest(flags));
+    dumpResponse(await mk3.sendLEDRequest());
+    dumpResponse(await mk3.sendDCRequest());
+    for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase += 1) {
+        dumpResponse(await mk3.sendACRequest(phase));
+    }
+    dumpResponse(await mk3.sendPowerRequest());
+    dumpResponse(await mk3.sendConfigRequest());
     if (!handler.faulted) await delay(POLL_INTERVAL_MS);
 }
 
-async function runMonitor(path) {
-    const handler = new MonitorHandler();
-    const mk3 = new VictronMK3(path);
+async function runMonitor(options) {
+    const handler = new MonitorHandler(options);
+    const mk3 = new VictronMK3(options);
     await mk3.start(handler);
     try {
         while (!handler.faulted) await poll(mk3, handler);
@@ -116,19 +114,20 @@ async function runMonitor(path) {
 }
 
 async function runControl(options) {
-    logger.info(
+    options.log.info(
         `Setting switch state to ${options.switchName.toUpperCase()} and current limit to ${options.currentLimit} amps`,
     );
-    const handler = new MonitorHandler();
-    const mk3 = new VictronMK3(options.path);
+    const handler = new MonitorHandler(options);
+    const mk3 = new VictronMK3(options);
     await mk3.start(handler);
     const flags = InterfaceFlags.PANEL_DETECT | (options.standby ? InterfaceFlags.STANDBY : 0);
     try {
         let stateResponse = null;
         while (!stateResponse && !handler.faulted) {
-            await mk3.sendInterfaceRequest(flags);
+            dumpResponse(await mk3.sendInterfaceRequest(flags));
             stateResponse = await mk3.sendStateRequest(options.switchState, options.currentLimit);
-            await mk3.sendConfigRequest();
+            dumpResponse(stateResponse);
+            dumpResponse(await mk3.sendConfigRequest());
             if (!stateResponse && !handler.faulted) await delay(POLL_INTERVAL_MS);
         }
         while (options.monitor && !handler.faulted) {
@@ -146,15 +145,29 @@ async function main() {
         process.exitCode = 2;
         return;
     }
-    logger.setLevel(options.verbose ? LOG_LEVELS.DEBUG : LOG_LEVELS.INFO);
-    if (options.command === 'monitor') await runMonitor(options.path);
-    else if (options.command === 'control') await runControl(options);
-    else logger.info(`Result: ${await probe(options.path)}`);
+
+    options.log = {
+        error: console.error,
+        warn: console.warn,
+        info: console.info,
+        debug: console.debug,
+    };
+
+    switch (options.command) {
+        case 'monitor':
+            await runMonitor(options);
+            break;
+        case 'control':
+            await runControl(options);
+            break;
+        default:
+            options.log.info(`Result: ${await probe(options)}`);
+    }
 }
 
 if (require.main === module) {
     main().catch(error => {
-        logger.error(error);
+        console.error(error);
         process.exitCode = 1;
     });
 }
