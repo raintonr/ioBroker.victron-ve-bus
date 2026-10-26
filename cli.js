@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Initially ported from https://github.com/j9brown/victron-mk3 with Copilot
+// ... but then most of that binned because turns out Python ported to JS
+// by an AI is almost as bad as the original!
 
 'use strict';
 
-const { AC_PHASES_SUPPORTED, Handler, InterfaceFlags, SwitchState, VictronMK3, probe } = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, VictronMK3 } = require('./lib/victronMk3');
 const { inspect } = require('util');
 
 const POLL_INTERVAL_MS = 5000;
@@ -14,28 +16,6 @@ const log = {
     info: console.info,
     debug: console.debug,
 };
-
-class MonitorHandler extends Handler {
-    constructor(options) {
-        super();
-        this.log = options.log;
-        this.faulted = false;
-    }
-
-    on_response(response) {
-        // Don't log the response as we will do that from the returned object
-        this.log.debug('response');
-    }
-
-    on_idle() {
-        this.log.info('Idle');
-    }
-
-    on_fault(fault) {
-        this.log.error(`Fault: ${fault}`);
-        this.faulted = true;
-    }
-}
 
 function usage() {
     console.error(`Usage:
@@ -48,7 +28,7 @@ function parseArgs(args) {
     const verbose = args[0] === '-v' || args[0] === '--verbose';
     if (verbose) args = args.slice(1);
     const command = args[0];
-    if (!['monitor', 'control', 'probe'].includes(command)) return null;
+    if (!['monitor'].includes(command)) return null;
     const path = args[1];
     if (!path) return null;
     if (command !== 'control') {
@@ -96,6 +76,7 @@ function delay(ms) {
 function dumpObject(obj) {
     return inspect(obj, { colors: Boolean(process.stdout.isTTY), depth: null, compact: false });
 }
+
 function dumpResponse(response) {
     if (response) {
         log.info(dumpObject(response));
@@ -104,21 +85,18 @@ function dumpResponse(response) {
     }
 }
 
-async function poll(mk3, handler, flags = null) {
-    log.info('sendInterfaceRequest...');
-    dumpResponse(await mk3.sendInterfaceRequest(flags));
+async function poll(mk3) {
+    log.info('sendLedRequest...');
+    dumpResponse(await mk3.sendLedRequest());
 
-    log.info('sendLEDRequest...');
-    dumpResponse(await mk3.sendLEDRequest());
-
-    log.info('sendDCRequest...');
-    dumpResponse(await mk3.sendDCRequest());
+    log.info('sendDcRequest...');
+    dumpResponse(await mk3.sendDcRequest());
 
     for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase += 1) {
-        log.info(`sendACRequest (phase ${phase})...`);
-        const response = await mk3.sendACRequest(phase);
+        log.info(`sendAcRequest (phase ${phase})...`);
+        const response = await mk3.sendAcRequest(phase);
         dumpResponse(response);
-        if (!response || phase <= response?.ac_num_phases) {
+        if (!response || phase <= response?.acPhases) {
             break;
         }
     }
@@ -128,40 +106,15 @@ async function poll(mk3, handler, flags = null) {
 
     log.info('sendConfigRequest...');
     dumpResponse(await mk3.sendConfigRequest());
-
-    if (!handler.faulted) await delay(POLL_INTERVAL_MS);
 }
 
 async function runMonitor(options) {
-    const handler = new MonitorHandler(options);
     const mk3 = new VictronMK3(options);
-    await mk3.start(handler);
+    await mk3.start();
     try {
-        while (!handler.faulted) await poll(mk3, handler);
-    } finally {
-        await mk3.stop();
-    }
-}
-
-async function runControl(options) {
-    options.log.info(
-        `Setting switch state to ${options.switchName.toUpperCase()} and current limit to ${options.currentLimit} amps`,
-    );
-    const handler = new MonitorHandler(options);
-    const mk3 = new VictronMK3(options);
-    await mk3.start(handler);
-    const flags = InterfaceFlags.PANEL_DETECT | (options.standby ? InterfaceFlags.STANDBY : 0);
-    try {
-        let stateResponse = null;
-        while (!stateResponse && !handler.faulted) {
-            dumpResponse(await mk3.sendInterfaceRequest(flags));
-            stateResponse = await mk3.sendStateRequest(options.switchState, options.currentLimit);
-            dumpResponse(stateResponse);
-            dumpResponse(await mk3.sendConfigRequest());
-            if (!stateResponse && !handler.faulted) await delay(POLL_INTERVAL_MS);
-        }
-        while (options.monitor && !handler.faulted) {
-            await poll(mk3, handler, flags);
+        while (true) {
+            await poll(mk3);
+            await delay(POLL_INTERVAL_MS);
         }
     } finally {
         await mk3.stop();
@@ -185,9 +138,6 @@ async function main() {
     switch (options.command) {
         case 'monitor':
             await runMonitor(options);
-            break;
-        case 'control':
-            await runControl(options);
             break;
         case 'probe':
             log.info(dumpObject(await probe(options)));
