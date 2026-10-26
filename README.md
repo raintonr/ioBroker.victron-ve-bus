@@ -13,7 +13,9 @@
 
 ## victron-ve-bus adapter for ioBroker
 
-Communicate with Victron devices directly over VE.Bus without the need for Venus OS or other dependencies (aside from a serial/USB VE.Bus interface).
+Monitor Victron devices directly over VE.Bus without the need for Venus OS or other dependencies (aside from a serial/USB VE.Bus interface).
+
+This adapter is purposfully read only for lightweight monitoring tasks. It is recommended to use only official Victron software to configure their devices.
 
 ### References
 
