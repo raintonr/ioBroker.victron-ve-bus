@@ -28,7 +28,7 @@ function parseArgs(args) {
     const verbose = args[0] === '-v' || args[0] === '--verbose';
     if (verbose) args = args.slice(1);
     const command = args[0];
-    if (!['monitor'].includes(command)) return null;
+    if (!['monitor', 'probe'].includes(command)) return null;
     const path = args[1];
     if (!path) return null;
     if (command !== 'control') {
@@ -119,6 +119,14 @@ async function runMonitor(options) {
     } finally {
         await mk3.stop();
     }
+}
+
+async function probe(options) {
+    const mk3 = new VictronMK3(options);
+    await mk3.start();
+    const out = await mk3.sendVersionRequest();
+    await mk3.stop();
+    return out;
 }
 
 async function main() {
