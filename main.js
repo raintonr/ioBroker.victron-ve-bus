@@ -8,7 +8,9 @@
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
 
-const { AC_PHASES_SUPPORTED, VictronMK3 } = require('./lib/victronMk3');
+const { HEARTBEAT_EVENT, VictronMK3 } = require('./lib/victronMk3');
+const POLL_INTERVAL_MS = 10000;
+const HEARTBEAT_TIMEOUT_MS = 5000;
 
 class VictronVeBus extends utils.Adapter {
     /**
@@ -21,6 +23,7 @@ class VictronVeBus extends utils.Adapter {
         });
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
+        this.heartbeatTimer = null;
     }
 
     // Set/reset connection
@@ -33,6 +36,13 @@ class VictronVeBus extends utils.Adapter {
         return new Promise(resolve => this.setTimeout(resolve, ms));
     }
 
+    clearHeartbeatTimer() {
+        if (this.heartbeatTimer) {
+            this.clearTimeout(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+    }
+
     /**
      * Is called when databases are connected and adapter received configuration.
      */
@@ -41,19 +51,29 @@ class VictronVeBus extends utils.Adapter {
         await this.setConnected(false);
 
         this.mk3 = new VictronMK3({ log: this.log, path: this.config.serialPort });
+
+        this.mk3.on(HEARTBEAT_EVENT, () => {
+            this.log.debug('Heartbeat');
+            this.clearHeartbeatTimer();
+            this.setConnected(true);
+
+            this.heartbeatTimer = this.setTimeout(() => {
+                this.heartbeatTimer = null;
+                this.log.warn('Heartbeat timeout');
+                this.setConnected(false);
+            }, HEARTBEAT_TIMEOUT_MS);
+        });
+
         await this.mk3.start();
 
         while (true) {
-            // TODO: only on heartbeat
-            await this.setConnected(true);
-
             // TODO: Stash these in states
             await this.mk3.sendConfigRequest();
             await this.mk3.sendDcRequest();
             await this.mk3.getAllAcPhases();
             await this.mk3.sendPowerRequest();
 
-            await this.sleep(10000);
+            await this.sleep(POLL_INTERVAL_MS);
         }
     }
 
@@ -64,6 +84,8 @@ class VictronVeBus extends utils.Adapter {
      */
     onUnload(callback) {
         try {
+            this.clearHeartbeatTimer();
+            this.mk3?.removeAllListeners();
             this.mk3?.stop();
             this.setConnected(false).then(() => {
                 callback();
