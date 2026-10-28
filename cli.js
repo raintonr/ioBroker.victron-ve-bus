@@ -111,6 +111,9 @@ async function poll(mk3) {
 async function runMonitor(options) {
     const mk3 = new VictronMK3(options);
     await mk3.start();
+    mk3.on('heartbeat', () => {
+        log.debug('<<<< Heartbeat');
+    });
     try {
         while (true) {
             await poll(mk3);
