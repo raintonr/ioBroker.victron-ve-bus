@@ -8,7 +8,7 @@
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
 
-const { HEARTBEAT_EVENT, VictronMK3 } = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, LEDS, VictronMK3 } = require('./lib/victronMk3');
 const POLL_INTERVAL_MS = 10000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
 
@@ -50,6 +50,9 @@ class VictronVeBus extends utils.Adapter {
         // Not connected by default
         await this.setConnected(false);
 
+        await this.createObjects();
+
+        // TODO: handle errors
         this.mk3 = new VictronMK3({ log: this.log, path: this.config.serialPort });
 
         this.mk3.on(HEARTBEAT_EVENT, () => {
@@ -69,11 +72,127 @@ class VictronVeBus extends utils.Adapter {
         while (true) {
             // TODO: Stash these in states
             await this.mk3.sendConfigRequest();
-            await this.mk3.sendDcRequest();
-            await this.mk3.getAllAcPhases();
+            await this.setLeds(await this.mk3.sendLedRequest());
+            await this.setDc(await this.mk3.sendDcRequest());
+            await this.setAc(await this.mk3.getAllAcPhases());
             await this.mk3.sendPowerRequest();
 
             await this.sleep(POLL_INTERVAL_MS);
+        }
+    }
+
+    async setLeds(leds) {
+        await this.setStateChanged('leds.raw_blink', leds.ledBlink, true);
+        await this.setStateChanged('leds.raw_on', leds.ledOn, true);
+
+        for (const led of LEDS) {
+            // Victron doco says LED off with blink on == anti-phase blink
+            await this.setStateChanged(`leds.${led}`, leds[led].on + leds[led].blink * 2, true);
+        }
+    }
+
+    async setDc(dc) {
+        await this.setStateChanged('dc.voltage', dc.voltage, true);
+        await this.setStateChanged('dc.inverter_current', dc.currentInverter, true);
+        await this.setStateChanged('dc.inverter_period', dc.inverterPeriod, true);
+        await this.setStateChanged('dc.charger_current', dc.currentCharger, true);
+    }
+
+    async setAc(acPhases) {
+        for (const phase of acPhases) {
+            const phaseId = phase.phaseInfo;
+            await this.setStateChanged(`ac.${phaseId}.bf_factor`, phase.bfFactor, true);
+            await this.setStateChanged(`ac.${phaseId}.inverter_factor`, phase.inverterFactor, true);
+            await this.setStateChanged(`ac.${phaseId}.state`, phase.state, true);
+            await this.setStateChanged(`ac.${phaseId}.mains_voltage`, phase.mainsVoltage, true);
+            await this.setStateChanged(`ac.${phaseId}.mains_current`, phase.mainsCurrent, true);
+            await this.setStateChanged(`ac.${phaseId}.inverter_voltage`, phase.inverterVoltage, true);
+            await this.setStateChanged(`ac.${phaseId}.inverter_current`, phase.inverterCurrent, true);
+            await this.setStateChanged(`ac.${phaseId}.mains_period`, phase.mainsPeriod, true);
+        }
+    }
+
+    async createObjects() {
+        const folders = [
+            ['leds', 'LED states'],
+            ['master_multi_led', 'MasterMultiLED'],
+            ['dc', 'DC'],
+            ['ac', 'AC'],
+        ];
+        for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase++) {
+            folders.push([`ac.${phase}`, `AC phase ${phase}`]);
+        }
+
+        for (const folder of folders) {
+            await this.setObjectNotExistsAsync(folder[0], {
+                type: 'folder',
+                common: {
+                    name: folder[0],
+                    desc: folder[1],
+                },
+                native: {},
+            });
+        }
+
+        const dcPhaseStates = [
+            ['voltage', 'number', 'value.voltage', 'DC voltage'],
+            ['inverter_current', 'number', 'value.current', 'Inverter current'],
+            ['inverter_period', 'number', 'value.frequency', 'Inverter period'],
+            ['charger_current', 'number', 'value.current', 'Charger current'],
+        ];
+        await this.createStatesFromList(dcPhaseStates, 'dc.');
+
+        const acPhaseStates = [
+            ['bf_factor', 'number', 'value', 'BF (backfeed) factor'],
+            ['inverter_factor', 'number', 'value', 'Inverter factor'],
+            // TODO: decode state
+            ['state', 'number', 'value', 'State bitmask'],
+            ['mains_voltage', 'number', 'value.voltage', 'Mains voltage'],
+            ['mains_current', 'number', 'value.current', 'Mains current'],
+            ['inverter_voltage', 'number', 'value.voltage', 'Inverter voltage'],
+            ['inverter_current', 'number', 'value.current', 'Inverter current'],
+            ['mains_period', 'number', 'value.frequency', 'Mains period'],
+        ];
+        for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase++) {
+            await this.createStatesFromList(acPhaseStates, `ac.${phase}.`);
+        }
+
+        const ledStates = [
+            ['leds.raw_on', 'number', 'value', 'Raw LED on value'],
+            ['leds.raw_blink', 'number', 'value', 'Raw LED blink value'],
+        ];
+
+        for (const led of LEDS) {
+            ledStates.push([
+                `leds.${led}`,
+                'number',
+                'value',
+                `Status of ${led}`,
+                { 0: 'Off', 1: 'On', 2: 'Anti-phase blinking', 3: 'blinking' },
+            ]);
+        }
+        await this.createStatesFromList(ledStates);
+    }
+
+    async createStatesFromList(stateList, prefix = '') {
+        for (const state of stateList) {
+            const common = {
+                name: state[0],
+                type: state[1],
+                role: state[2],
+                desc: state[3],
+                read: true,
+                write: false,
+            };
+            if (state[4]) {
+                // Add a common state when given
+                common.state = state[4];
+            }
+            await this.setObjectNotExistsAsync(`${prefix}${state[0]}`, {
+                type: 'state',
+                common,
+                native: {},
+            });
         }
     }
 
