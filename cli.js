@@ -5,7 +5,7 @@
 
 'use strict';
 
-const { AC_PHASES_SUPPORTED, VictronMK3 } = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, VictronMK3 } = require('./lib/victronMk3');
 const { inspect } = require('util');
 
 const POLL_INTERVAL_MS = 5000;
@@ -111,8 +111,8 @@ async function poll(mk3) {
 async function runMonitor(options) {
     const mk3 = new VictronMK3(options);
     await mk3.start();
-    mk3.on('heartbeat', () => {
-        log.debug('<<<< Heartbeat');
+    mk3.on(HEARTBEAT_EVENT, () => {
+        log.debug('**** Heartbeat ****');
     });
     try {
         while (true) {
