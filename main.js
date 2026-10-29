@@ -11,6 +11,7 @@ const utils = require('@iobroker/adapter-core');
 const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, LEDS, VictronMK3 } = require('./lib/victronMk3');
 const POLL_INTERVAL_MS = 10000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
+const RETRY_TIMEOUT_MS = 30000;
 
 class VictronVeBus extends utils.Adapter {
     /**
@@ -28,7 +29,7 @@ class VictronVeBus extends utils.Adapter {
 
     // Set/reset connection
     async setConnected(connected) {
-        await this.setState('info.connection', connected, true);
+        await this.setStateChanged('info.connection', connected, true);
     }
 
     // Sleep between polls
@@ -49,10 +50,18 @@ class VictronVeBus extends utils.Adapter {
     async onReady() {
         // Not connected by default
         await this.setConnected(false);
+        if (!this.config.serialPort) {
+            this.log.error('No serial port configured! Please define the serial port in adapter settings.');
+            this.disable();
+        } else {
+            await this.createObjects();
+            this.startMk3();
+        }
+    }
 
-        await this.createObjects();
+    async startMk3() {
+        this.log.info(`Connecting to MK3 on ${this.config.serialPort}`);
 
-        // TODO: handle errors
         this.mk3 = new VictronMK3({ log: this.log, path: this.config.serialPort });
 
         this.mk3.on(HEARTBEAT_EVENT, () => {
@@ -67,18 +76,35 @@ class VictronVeBus extends utils.Adapter {
             }, HEARTBEAT_TIMEOUT_MS);
         });
 
-        await this.mk3.start();
+        try {
+            await this.mk3.start();
 
-        while (true) {
-            // TODO: Stash these in states
-            await this.mk3.sendConfigRequest();
-            await this.setLeds(await this.mk3.sendLedRequest());
-            await this.setDc(await this.mk3.sendDcRequest());
-            await this.setAc(await this.mk3.getAllAcPhases());
-            await this.mk3.sendPowerRequest();
+            while (true) {
+                // TODO: Stash these in states
+                await this.mk3.sendConfigRequest();
+                await this.setLeds(await this.mk3.sendLedRequest());
+                await this.setDc(await this.mk3.sendDcRequest());
+                await this.setAc(await this.mk3.getAllAcPhases());
+                await this.mk3.sendPowerRequest();
 
-            await this.sleep(POLL_INTERVAL_MS);
+                await this.sleep(POLL_INTERVAL_MS);
+            }
+        } catch (err) {
+            this.log.error(err);
+            this.stopMk3();
+            this.log.info(`Retry in ${RETRY_TIMEOUT_MS / 1000}s`);
+            this.setTimeout(() => {
+                this.startMk3();
+            }, RETRY_TIMEOUT_MS);
         }
+    }
+
+    async stopMk3() {
+        this.log.info(`Shutting down MK3`);
+        this.clearHeartbeatTimer();
+        this.mk3?.removeAllListeners();
+        this.mk3?.stop();
+        await this.setConnected(false);
     }
 
     async setLeds(leds) {
@@ -203,10 +229,7 @@ class VictronVeBus extends utils.Adapter {
      */
     onUnload(callback) {
         try {
-            this.clearHeartbeatTimer();
-            this.mk3?.removeAllListeners();
-            this.mk3?.stop();
-            this.setConnected(false).then(() => {
+            this.stopMk3().then(() => {
                 callback();
             });
         } catch (error) {
