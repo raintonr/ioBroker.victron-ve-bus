@@ -25,11 +25,16 @@ class VictronVeBus extends utils.Adapter {
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
         this.heartbeatTimer = null;
+        this.connected = false;
     }
 
     // Set/reset connection
     async setConnected(connected) {
-        await this.setStateChanged('info.connection', connected, true);
+        // Keep track of our own 'connected' because we don't want to set state every heartbeat
+        if (this.connected != connected) {
+            await this.setStateChanged('info.connection', connected, true);
+            this.connected = connected;
+        }
     }
 
     // Sleep between polls
