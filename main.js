@@ -8,7 +8,7 @@
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
 
-const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, LEDS, VictronMK3 } = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, LEDS, VARS, VictronMK3 } = require('./lib/victronMk3');
 const POLL_INTERVAL_MS = 10000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
 const RETRY_TIMEOUT_MS = 30000;
@@ -26,6 +26,8 @@ class VictronVeBus extends utils.Adapter {
         this.on('unload', this.onUnload.bind(this));
         this.heartbeatTimer = null;
         this.connected = false;
+        // TODO: handle multiple addresses
+        this.address = 0;
     }
 
     // Set/reset connection
@@ -59,7 +61,7 @@ class VictronVeBus extends utils.Adapter {
             this.log.error('No serial port configured! Please define the serial port in adapter settings.');
             this.disable();
         } else {
-            await this.createObjects();
+            await this.createObjects(this.address);
             this.startMk3();
         }
     }
@@ -85,12 +87,11 @@ class VictronVeBus extends utils.Adapter {
             await this.mk3.start();
 
             while (true) {
-                // TODO: Stash these in states
                 await this.mk3.sendConfigRequest();
                 await this.setLeds(await this.mk3.sendLedRequest());
                 await this.setDc(await this.mk3.sendDcRequest());
                 await this.setAc(await this.mk3.getAllAcPhases());
-                await this.mk3.sendPowerRequest();
+                await this.setVars(await this.mk3.sendVarRequest(VARS.power));
 
                 await this.sleep(POLL_INTERVAL_MS);
             }
@@ -113,45 +114,52 @@ class VictronVeBus extends utils.Adapter {
     }
 
     async setLeds(leds) {
-        await this.setStateChanged('leds.raw_blink', leds.ledBlink, true);
-        await this.setStateChanged('leds.raw_on', leds.ledOn, true);
+        await this.setStateChanged(`${this.address}.leds.raw_blink`, leds.ledBlink, true);
+        await this.setStateChanged(`${this.address}.leds.raw_on`, leds.ledOn, true);
 
         for (const led of LEDS) {
             // Victron doco says LED off with blink on == anti-phase blink
-            await this.setStateChanged(`leds.${led}`, leds[led].on + leds[led].blink * 2, true);
+            await this.setStateChanged(`${this.address}.leds.${led}`, leds[led].on + leds[led].blink * 2, true);
+        }
+    }
+
+    async setVars(vars) {
+        for (const id of Object.keys(vars)) {
+            await this.setStateChanged(`${this.address}.var.${id}`, vars[id], true);
         }
     }
 
     async setDc(dc) {
-        await this.setStateChanged('dc.voltage', dc.voltage, true);
-        await this.setStateChanged('dc.inverter_current', dc.currentInverter, true);
-        await this.setStateChanged('dc.inverter_period', dc.inverterPeriod, true);
-        await this.setStateChanged('dc.charger_current', dc.currentCharger, true);
+        await this.setStateChanged(`${this.address}.dc.voltage`, dc.voltage, true);
+        await this.setStateChanged(`${this.address}.dc.inverter_current`, dc.currentInverter, true);
+        await this.setStateChanged(`${this.address}.dc.inverter_period`, dc.inverterPeriod, true);
+        await this.setStateChanged(`${this.address}.dc.charger_current`, dc.currentCharger, true);
     }
 
     async setAc(acPhases) {
         for (const phase of acPhases) {
             const phaseId = phase.phaseInfo;
-            await this.setStateChanged(`ac.${phaseId}.bf_factor`, phase.bfFactor, true);
-            await this.setStateChanged(`ac.${phaseId}.inverter_factor`, phase.inverterFactor, true);
-            await this.setStateChanged(`ac.${phaseId}.state`, phase.state, true);
-            await this.setStateChanged(`ac.${phaseId}.mains_voltage`, phase.mainsVoltage, true);
-            await this.setStateChanged(`ac.${phaseId}.mains_current`, phase.mainsCurrent, true);
-            await this.setStateChanged(`ac.${phaseId}.inverter_voltage`, phase.inverterVoltage, true);
-            await this.setStateChanged(`ac.${phaseId}.inverter_current`, phase.inverterCurrent, true);
-            await this.setStateChanged(`ac.${phaseId}.mains_period`, phase.mainsPeriod, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.bf_factor`, phase.bfFactor, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.inverter_factor`, phase.inverterFactor, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.state`, phase.state, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.mains_voltage`, phase.mainsVoltage, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.mains_current`, phase.mainsCurrent, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.inverter_voltage`, phase.inverterVoltage, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.inverter_current`, phase.inverterCurrent, true);
+            await this.setStateChanged(`${this.address}.ac.${phaseId}.mains_period`, phase.mainsPeriod, true);
         }
     }
 
-    async createObjects() {
+    async createObjects(adr) {
         const folders = [
-            ['leds', 'LED states'],
-            ['master_multi_led', 'MasterMultiLED'],
-            ['dc', 'DC'],
-            ['ac', 'AC'],
+            [`${adr}`, `Address ${this.address}`],
+            [`${adr}.dc`, 'DC'],
+            [`${adr}.ac`, 'AC'],
+            [`${adr}.leds`, 'LED states'],
+            [`${adr}.var`, 'RAM variables'],
         ];
         for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase++) {
-            folders.push([`ac.${phase}`, `AC phase ${phase}`]);
+            folders.push([`${adr}.ac.${phase}`, `AC phase ${phase}`]);
         }
 
         for (const folder of folders) {
@@ -171,7 +179,7 @@ class VictronVeBus extends utils.Adapter {
             ['inverter_period', 'number', 'value.frequency', 'Inverter period'],
             ['charger_current', 'number', 'value.current', 'Charger current'],
         ];
-        await this.createStatesFromList(dcPhaseStates, 'dc.');
+        await this.createStatesFromList(dcPhaseStates, `${adr}.dc.`);
 
         const acPhaseStates = [
             ['bf_factor', 'number', 'value', 'BF (backfeed) factor'],
@@ -185,7 +193,7 @@ class VictronVeBus extends utils.Adapter {
             ['mains_period', 'number', 'value.frequency', 'Mains period'],
         ];
         for (let phase = 1; phase <= AC_PHASES_SUPPORTED; phase++) {
-            await this.createStatesFromList(acPhaseStates, `ac.${phase}.`);
+            await this.createStatesFromList(acPhaseStates, `${adr}.ac.${phase}.`);
         }
 
         const ledStates = [
@@ -202,7 +210,15 @@ class VictronVeBus extends utils.Adapter {
                 { 0: 'Off', 1: 'On', 2: 'Anti-phase blinking', 3: 'blinking' },
             ]);
         }
-        await this.createStatesFromList(ledStates);
+        await this.createStatesFromList(ledStates, `${adr}.`);
+
+        // Variables we are interested in
+        const varStates = [
+            ['14', 'number', 'value.power', 'Inverter 1 Power (filtered)', 'W'],
+            ['15', 'number', 'value.power', 'Inverter 2 Power (filtered)', 'W'],
+            ['16', 'number', 'value.power', 'Output Power (filtered)', 'W'],
+        ];
+        await this.createStatesFromList(varStates, `${adr}.var.`);
     }
 
     async createStatesFromList(stateList, prefix = '') {
