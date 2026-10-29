@@ -5,7 +5,7 @@
 
 'use strict';
 
-const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, VictronMK3 } = require('./lib/victronMk3');
+const { AC_PHASES_SUPPORTED, HEARTBEAT_EVENT, VARS, VictronMK3 } = require('./lib/victronMk3');
 const { inspect } = require('util');
 
 const POLL_INTERVAL_MS = 5000;
@@ -102,7 +102,7 @@ async function poll(mk3) {
     }
 
     log.info('sendPowerRequest...');
-    dumpResponse(await mk3.sendPowerRequest());
+    dumpResponse(await mk3.sendVarRequest(VARS.power));
 
     log.info('sendConfigRequest...');
     dumpResponse(await mk3.sendConfigRequest());
