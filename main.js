@@ -118,8 +118,8 @@ class VictronVeBus extends utils.Adapter {
         await this.setStateChanged(`${this.address}.leds.raw_on`, leds.ledOn, true);
 
         for (const led of LEDS) {
-            // Victron doco says LED off with blink on == anti-phase blink
-            await this.setStateChanged(`${this.address}.leds.${led}`, leds[led].on + leds[led].blink * 2, true);
+            // TODO: handle 'blink'? Victron doco says LED off with blink on == anti-phase blink
+            await this.setStateChanged(`${this.address}.leds.${led}`, leds[led].on, true);
         }
     }
 
@@ -202,13 +202,7 @@ class VictronVeBus extends utils.Adapter {
         ];
 
         for (const led of LEDS) {
-            ledStates.push([
-                `leds.${led}`,
-                'number',
-                'value',
-                `Status of ${led}`,
-                { 0: 'Off', 1: 'On', 2: 'Anti-phase blinking', 3: 'blinking' },
-            ]);
+            ledStates.push([`leds.${led}`, 'boolean', 'sensor', `Status of ${led}`]);
         }
         await this.createStatesFromList(ledStates, `${adr}.`);
 
